@@ -10,168 +10,155 @@
 #define CUDNN_VERSION_MIN(major, minor, patch) \
     (CUDNN_VERSION >= (major * 1000 + minor * 100 + patch))
 
-#if !defined(CUDNN_VERSION) || !CUDNN_VERSION_MIN(6, 0, 0)
-#error "NVCaffe 0.16 and higher requires CuDNN version 6.0.0 or higher"
-#endif
-
 #define CUDNN_CHECK(condition) \
   do { \
     cudnnStatus_t status = condition; \
     CHECK_EQ(status, CUDNN_STATUS_SUCCESS) << " "\
-      << cudnnGetErrorString(status) << ", device " << Caffe::current_device(); \
+      << cudnnGetErrorString(status); \
   } while (0)
 
-#define CUDNN_CHECK2(condition, arg1, arg2) \
-  do { \
-    cudnnStatus_t status = condition; \
-    CHECK_EQ(status, CUDNN_STATUS_SUCCESS) << "CuDNN error " \
-      << (int)status << " " << (arg1) << " " << (arg2); \
-  } while (0)
+inline const char* cudnnGetErrorString(cudnnStatus_t status) {
+  switch (status) {
+    case CUDNN_STATUS_SUCCESS:
+      return "CUDNN_STATUS_SUCCESS";
+    case CUDNN_STATUS_NOT_INITIALIZED:
+      return "CUDNN_STATUS_NOT_INITIALIZED";
+    case CUDNN_STATUS_ALLOC_FAILED:
+      return "CUDNN_STATUS_ALLOC_FAILED";
+    case CUDNN_STATUS_BAD_PARAM:
+      return "CUDNN_STATUS_BAD_PARAM";
+    case CUDNN_STATUS_INTERNAL_ERROR:
+      return "CUDNN_STATUS_INTERNAL_ERROR";
+    case CUDNN_STATUS_INVALID_VALUE:
+      return "CUDNN_STATUS_INVALID_VALUE";
+    case CUDNN_STATUS_ARCH_MISMATCH:
+      return "CUDNN_STATUS_ARCH_MISMATCH";
+    case CUDNN_STATUS_MAPPING_ERROR:
+      return "CUDNN_STATUS_MAPPING_ERROR";
+    case CUDNN_STATUS_EXECUTION_FAILED:
+      return "CUDNN_STATUS_EXECUTION_FAILED";
+    case CUDNN_STATUS_NOT_SUPPORTED:
+      return "CUDNN_STATUS_NOT_SUPPORTED";
+    case CUDNN_STATUS_LICENSE_ERROR:
+      return "CUDNN_STATUS_LICENSE_ERROR";
+#if CUDNN_VERSION_MIN(6, 0, 0)
+    case CUDNN_STATUS_RUNTIME_PREREQUISITE_MISSING:
+      return "CUDNN_STATUS_RUNTIME_PREREQUISITE_MISSING";
+#endif
+#if CUDNN_VERSION_MIN(7, 0, 0)
+    case CUDNN_STATUS_RUNTIME_IN_PROGRESS:
+      return "CUDNN_STATUS_RUNTIME_IN_PROGRESS";
+    case CUDNN_STATUS_RUNTIME_FP_OVERFLOW:
+      return "CUDNN_STATUS_RUNTIME_FP_OVERFLOW";
+#endif
+  }
+  return "Unknown cudnn status";
+}
 
 namespace caffe {
 
 namespace cudnn {
 
-template<typename Dtype>
-class dataType;
-
-template<>
-class dataType<float> {
+template <typename Dtype> class dataType;
+template<> class dataType<float>  {
  public:
   static const cudnnDataType_t type = CUDNN_DATA_FLOAT;
-  static const cudnnDataType_t conv_type = CUDNN_DATA_FLOAT;
   static float oneval, zeroval;
   static const void *one, *zero;
 };
-
-template<>
-class dataType<double> {
+template<> class dataType<double> {
  public:
   static const cudnnDataType_t type = CUDNN_DATA_DOUBLE;
-  static const cudnnDataType_t conv_type = CUDNN_DATA_DOUBLE;
   static double oneval, zeroval;
   static const void *one, *zero;
 };
 
-
-inline
-const void* one(Type type) {
-  const void* ret = nullptr;
-  switch (type) {
-    case FLOAT:
-      ret = dataType<float>::one;
-      break;
-    case DOUBLE:
-      ret = dataType<double>::one;
-      break;
-    default:
-      LOG(FATAL) << "Unknown Type " << Type_Name(type);
-      break;
-  }
-  return ret;
-}
-
-inline
-const void* zero(Type type) {
-  const void* ret = nullptr;
-  switch (type) {
-    case FLOAT:
-      ret = dataType<float>::zero;
-      break;
-    case DOUBLE:
-      ret = dataType<double>::zero;
-      break;
-    default:
-      LOG(FATAL) << "Unknown Type " << Type_Name(type);
-      break;
-  }
-  return ret;
-}
-
-inline
-cudnnDataType_t cudnn_data_type(Type math) {
-  cudnnDataType_t ret;
-  switch (math) {
-    case FLOAT:
-      ret = dataType<float>::conv_type;
-      break;
-    case DOUBLE:
-      ret = dataType<double>::conv_type;
-      break;
-    default:
-      LOG(FATAL) << "Unknown Math type " << Type_Name(math);
-      break;
-  }
-  return ret;
-}
-
 template <typename Dtype>
-inline void createFilterDesc(cudnnFilterDescriptor_t* desc, int n, int c, int h, int w) {
-  CUDNN_CHECK(cudnnCreateFilterDescriptor(desc));
-  CUDNN_CHECK(cudnnSetFilter4dDescriptor(*desc, cudnn::dataType<Dtype>::type,
-      CUDNN_TENSOR_NCHW, n, c, h, w));
-}
-
-inline void setConvolutionDesc(Type math, cudnnConvolutionDescriptor_t conv,
-      int pad_h, int pad_w, int stride_h, int stride_w, int dilation_h, int dilation_w) {
-  int padA[2] = {pad_h, pad_w};
-  int strideA[2] = {stride_h, stride_w};
-  int upscaleA[2] = {dilation_h, dilation_w};
-  CUDNN_CHECK(cudnnSetConvolutionNdDescriptor(conv, 2, padA, strideA, upscaleA,
-      CUDNN_CROSS_CORRELATION, cudnn::cudnn_data_type(math)));
-}
-
-template<typename Dtype>
-inline void createTensor4dDesc(cudnnTensorDescriptor_t *desc) {
+inline void createTensor4dDesc(cudnnTensorDescriptor_t* desc) {
   CUDNN_CHECK(cudnnCreateTensorDescriptor(desc));
 }
 
-template<typename Dtype>
-inline void setTensor4dDesc(cudnnTensorDescriptor_t *desc,
+template <typename Dtype>
+inline void setTensor4dDesc(cudnnTensorDescriptor_t* desc,
     int n, int c, int h, int w,
     int stride_n, int stride_c, int stride_h, int stride_w) {
   CUDNN_CHECK(cudnnSetTensor4dDescriptorEx(*desc, dataType<Dtype>::type,
-      n, c, h, w, stride_n, stride_c, stride_h, stride_w));
+        n, c, h, w, stride_n, stride_c, stride_h, stride_w));
 }
 
-template<typename Dtype>
-inline void setTensor4dDesc(cudnnTensorDescriptor_t *desc,
+template <typename Dtype>
+inline void setTensor4dDesc(cudnnTensorDescriptor_t* desc,
     int n, int c, int h, int w) {
   const int stride_w = 1;
   const int stride_h = w * stride_w;
   const int stride_c = h * stride_h;
   const int stride_n = c * stride_c;
   setTensor4dDesc<Dtype>(desc, n, c, h, w,
-      stride_n, stride_c, stride_h, stride_w);
+                         stride_n, stride_c, stride_h, stride_w);
 }
 
-inline void setTensor4dDesc(cudnnTensorDescriptor_t *desc, cudnnDataType_t type,
-    Packing packing, const vector<int> &shape) {
-  int stride_w = 0, stride_h = 0, stride_c = 0, stride_n = 0;
-  const int n = shape[0];
-  const int c = shape[1];
-  const int h = shape[2];
-  const int w = shape[3];
-  if (packing == NCHW) {
-    stride_w = 1;
-    stride_h = w * stride_w;
-    stride_c = h * stride_h;
-    stride_n = c * stride_c;
-  } else if (packing == NHWC) {
-    stride_c = 1;
-    stride_w = c * stride_c;
-    stride_h = w * stride_w;
-    stride_n = h * stride_h;
-  } else {
-    LOG(FATAL) << "Unknown packing";
+template <typename Dtype>
+inline void createFilterDesc(cudnnFilterDescriptor_t* desc,
+    int n, int c, int h, int w) {
+  CUDNN_CHECK(cudnnCreateFilterDescriptor(desc));
+#if CUDNN_VERSION_MIN(5, 0, 0)
+  CUDNN_CHECK(cudnnSetFilter4dDescriptor(*desc, dataType<Dtype>::type,
+      CUDNN_TENSOR_NCHW, n, c, h, w));
+#else
+  CUDNN_CHECK(cudnnSetFilter4dDescriptor_v4(*desc, dataType<Dtype>::type,
+      CUDNN_TENSOR_NCHW, n, c, h, w));
+#endif
+}
+
+template <typename Dtype>
+inline void createConvolutionDesc(cudnnConvolutionDescriptor_t* conv) {
+  CUDNN_CHECK(cudnnCreateConvolutionDescriptor(conv));
+}
+
+template <typename Dtype>
+inline void setConvolutionDesc(cudnnConvolutionDescriptor_t* conv,
+    cudnnTensorDescriptor_t bottom, cudnnFilterDescriptor_t filter,
+    int pad_h, int pad_w, int stride_h, int stride_w) {
+#if CUDNN_VERSION_MIN(6, 0, 0)
+  CUDNN_CHECK(cudnnSetConvolution2dDescriptor(*conv,
+      pad_h, pad_w, stride_h, stride_w, 1, 1, CUDNN_CROSS_CORRELATION,
+      dataType<Dtype>::type));
+#else
+    CUDNN_CHECK(cudnnSetConvolution2dDescriptor(*conv,
+      pad_h, pad_w, stride_h, stride_w, 1, 1, CUDNN_CROSS_CORRELATION));
+#endif
+}
+
+template <typename Dtype>
+inline void createPoolingDesc(cudnnPoolingDescriptor_t* pool_desc,
+    PoolingParameter_PoolMethod poolmethod, cudnnPoolingMode_t* mode,
+    int h, int w, int pad_h, int pad_w, int stride_h, int stride_w) {
+  switch (poolmethod) {
+  case PoolingParameter_PoolMethod_MAX:
+    *mode = CUDNN_POOLING_MAX;
+    break;
+  case PoolingParameter_PoolMethod_AVE:
+    *mode = CUDNN_POOLING_AVERAGE_COUNT_INCLUDE_PADDING;
+    break;
+  default:
+    LOG(FATAL) << "Unknown pooling method.";
   }
-  CUDNN_CHECK(cudnnSetTensor4dDescriptorEx(*desc, type,
-      n, c, h, w, stride_n, stride_c, stride_h, stride_w));
+  CUDNN_CHECK(cudnnCreatePoolingDescriptor(pool_desc));
+#if CUDNN_VERSION_MIN(5, 0, 0)
+  CUDNN_CHECK(cudnnSetPooling2dDescriptor(*pool_desc, *mode,
+        CUDNN_PROPAGATE_NAN, h, w, pad_h, pad_w, stride_h, stride_w));
+#else
+  CUDNN_CHECK(cudnnSetPooling2dDescriptor_v4(*pool_desc, *mode,
+        CUDNN_PROPAGATE_NAN, h, w, pad_h, pad_w, stride_h, stride_w));
+#endif
 }
 
-inline void setTensor4dDesc(cudnnTensorDescriptor_t *desc, Type type,
-    Packing packing, const vector<int> &shape) {
-  setTensor4dDesc(desc, cudnn_data_type(type), packing, shape);
+template <typename Dtype>
+inline void createActivationDescriptor(cudnnActivationDescriptor_t* activ_desc,
+    cudnnActivationMode_t mode) {
+  CUDNN_CHECK(cudnnCreateActivationDescriptor(activ_desc));
+  CUDNN_CHECK(cudnnSetActivationDescriptor(*activ_desc, mode,
+                                           CUDNN_PROPAGATE_NAN, Dtype(0)));
 }
 
 }  // namespace cudnn

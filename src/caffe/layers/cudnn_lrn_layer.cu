@@ -5,35 +5,40 @@
 
 namespace caffe {
 
-template <typename Ftype, typename Btype>
-void CuDNNLRNLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom,
-    const vector<Blob*>& top) {
-  CUDNN_CHECK(cudnnLRNCrossChannelForward(Caffe::cudnn_handle(0),
-      norm_desc_,
-      CUDNN_LRN_CROSS_CHANNEL_DIM1,
-      cudnn::dataType<Ftype>::one,
-      fwd_bottom_desc_, bottom[0]->gpu_data<Ftype>(),
-      cudnn::dataType<Ftype>::zero,
-      fwd_top_desc_, top[0]->mutable_gpu_data<Ftype>()));
-  CUDA_CHECK(cudaStreamSynchronize(Caffe::thread_stream()));
+template <typename Dtype>
+void CuDNNLRNLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
+    const vector<Blob<Dtype>*>& top) {
+  const Dtype* bottom_data = bottom[0]->gpu_data();
+  Dtype* top_data = top[0]->mutable_gpu_data();
+
+  CUDNN_CHECK(cudnnLRNCrossChannelForward(
+        handle_, norm_desc_, CUDNN_LRN_CROSS_CHANNEL_DIM1,
+        cudnn::dataType<Dtype>::one,
+        bottom_desc_, bottom_data,
+        cudnn::dataType<Dtype>::zero,
+        top_desc_, top_data) );
 }
 
-template <typename Ftype, typename Btype>
-void CuDNNLRNLayer<Ftype, Btype>::Backward_gpu(const vector<Blob*>& top,
-    const vector<bool>& propagate_down, const vector<Blob*>& bottom) {
-  CUDNN_CHECK(cudnnLRNCrossChannelBackward(Caffe::cudnn_handle(0),
-      norm_desc_,
-      CUDNN_LRN_CROSS_CHANNEL_DIM1,
-      cudnn::dataType<Btype>::one,
-      bwd_top_desc_, top[0]->gpu_data<Btype>(),
-      bwd_top_desc_, top[0]->gpu_diff<Btype>(),
-      bwd_bottom_desc_, bottom[0]->gpu_data<Btype>(),
-      cudnn::dataType<Btype>::zero,
-      bwd_bottom_desc_, bottom[0]->mutable_gpu_diff<Btype>()));
-  CUDA_CHECK(cudaStreamSynchronize(Caffe::thread_stream()));
+template <typename Dtype>
+void CuDNNLRNLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
+    const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
+  const Dtype* top_diff = top[0]->gpu_diff();
+  const Dtype* top_data = top[0]->gpu_data();
+  const Dtype* bottom_data = bottom[0]->gpu_data();
+  Dtype* bottom_diff = bottom[0]->mutable_gpu_diff();
+
+  CUDNN_CHECK(cudnnLRNCrossChannelBackward(
+        handle_, norm_desc_, CUDNN_LRN_CROSS_CHANNEL_DIM1,
+        cudnn::dataType<Dtype>::one,
+        top_desc_, top_data,
+        top_desc_, top_diff,
+        bottom_desc_, bottom_data,
+        cudnn::dataType<Dtype>::zero,
+        bottom_desc_, bottom_diff) );
 }
 
-INSTANTIATE_LAYER_GPU_FUNCS_FB(CuDNNLRNLayer);
+INSTANTIATE_LAYER_GPU_FUNCS(CuDNNLRNLayer);
 
-}  // namespace caffe
+};  // namespace caffe
+
 #endif
