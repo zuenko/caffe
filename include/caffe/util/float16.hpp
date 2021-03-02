@@ -9,7 +9,7 @@
 #ifdef __CUDACC__
 #include "caffe/util/half.cuh"
 #endif
-#include "half_float/half.hpp"
+#include "caffe/half_float/half.hpp"
 
 namespace caffe {
   typedef half_float::half float16;
