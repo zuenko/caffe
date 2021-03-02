@@ -21,23 +21,23 @@ namespace caffe {
  * inputs. Caffe + cuDNN further speeds up the computation through forward
  * parallelism across groups and backward parallelism across gradients.
 */
-template <typename Dtype>
-class CuDNNDeconvolutionLayer : public DeconvolutionLayer<Dtype> {
+template<typename Ftype, typename Btype>
+class CuDNNDeconvolutionLayer : public DeconvolutionLayer<Ftype, Btype> {
  public:
   explicit CuDNNDeconvolutionLayer(const LayerParameter& param)
-    : DeconvolutionLayer<Dtype>(param), handles_setup_(false) {}
-  virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
-                          const vector<Blob<Dtype>*>& top);
-  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
-                       const vector<Blob<Dtype>*>& top);
+    : DeconvolutionLayer<Ftype, Btype>(param),
+      handles_setup_(false),
+      forward_math_(tpmax<Ftype, float>()),
+      backward_data_math_(tpmax<Btype, float>()),
+      backward_filter_math_(tpmax<Btype, float>()) {}
   virtual ~CuDNNDeconvolutionLayer();
+  void LayerSetUp(const vector<Blob*>& bottom, const vector<Blob*>& top) override;
+  void Reshape(const vector<Blob*>& bottom, const vector<Blob*>& top) override;
 
  protected:
-  virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
-                           const vector<Blob<Dtype>*>& top);
-  virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
-                            const vector<bool>& propagate_down,
-                            const vector<Blob<Dtype>*>& bottom);
+  void Forward_gpu(const vector<Blob*>& bottom, const vector<Blob*>& top) override;
+  void Backward_gpu(const vector<Blob*>& top, const vector<bool>& propagate_down,
+                    const vector<Blob*>& bottom) override;
 
   bool handles_setup_;
   cudnnHandle_t* handle_;
@@ -53,6 +53,7 @@ class CuDNNDeconvolutionLayer : public DeconvolutionLayer<Dtype> {
   cudnnFilterDescriptor_t filter_desc_;
   vector<cudnnConvolutionDescriptor_t> conv_descs_;
   int bottom_offset_, top_offset_, bias_offset_;
+  Type forward_math_, backward_data_math_, backward_filter_math_;
 
   size_t *workspace_fwd_sizes_;
   size_t *workspace_bwd_data_sizes_;
