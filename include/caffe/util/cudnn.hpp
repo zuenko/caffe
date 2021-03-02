@@ -6,7 +6,6 @@
 
 #include "caffe/common.hpp"
 #include "caffe/proto/caffe.pb.h"
-#include "caffe/util/float16.hpp"
 
 #define CUDNN_VERSION_MIN(major, minor, patch) \
     (CUDNN_VERSION >= (major * 1000 + minor * 100 + patch))
@@ -54,14 +53,6 @@ class dataType<double> {
   static const void *one, *zero;
 };
 
-template<>
-class dataType<float16> {
- public:
-  static const cudnnDataType_t type = CUDNN_DATA_HALF;
-  static const cudnnDataType_t conv_type = CUDNN_DATA_HALF;
-  static float oneval, zeroval;
-  static const void *one, *zero;
-};
 
 inline
 const void* one(Type type) {
@@ -69,9 +60,6 @@ const void* one(Type type) {
   switch (type) {
     case FLOAT:
       ret = dataType<float>::one;
-      break;
-    case FLOAT16:
-      ret = dataType<float16>::one;
       break;
     case DOUBLE:
       ret = dataType<double>::one;
@@ -90,9 +78,6 @@ const void* zero(Type type) {
     case FLOAT:
       ret = dataType<float>::zero;
       break;
-    case FLOAT16:
-      ret = dataType<float16>::zero;
-      break;
     case DOUBLE:
       ret = dataType<double>::zero;
       break;
@@ -109,13 +94,6 @@ cudnnDataType_t cudnn_data_type(Type math) {
   switch (math) {
     case FLOAT:
       ret = dataType<float>::conv_type;
-      break;
-    case FLOAT16:
-      if (caffe::Caffe::device_capability(caffe::Caffe::device()) >= 600) {
-        ret = dataType<float16>::conv_type;
-      } else {
-        ret = dataType<float>::conv_type;
-      }
       break;
     case DOUBLE:
       ret = dataType<double>::conv_type;
